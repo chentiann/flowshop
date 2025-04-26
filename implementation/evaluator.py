@@ -153,6 +153,7 @@ class Evaluator:
             inputs: Sequence[Any],  # RZ: I guess this refers to the evaluate instance
             timeout_seconds: int = 30,
             sandbox_class: Type[Sandbox] = Sandbox,
+            log_file: str = './logs/evaluator.log',
             profiler: profile.Profiler | None = None  # RZ: add profiler as an argument
     ):
         self._database = database
@@ -163,6 +164,8 @@ class Evaluator:
         self._timeout_seconds = timeout_seconds
         self._sandbox = sandbox_class()
         self._profiler = profiler  # RZ: Store profiler
+        self._log_file = log_file
+
 
     def analyse(
             self,
