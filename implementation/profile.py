@@ -1,5 +1,10 @@
+# implemented by RZ
+# profile the experiment using tensorboard
+
 from __future__ import annotations
+
 import os.path
+from typing import List, Dict
 import logging
 import json
 from implementation import code_manipulation
@@ -23,6 +28,7 @@ class Profiler:
         self._log_dir = log_dir
         self._json_dir = os.path.join(log_dir, 'samples')
         os.makedirs(self._json_dir, exist_ok=True)
+        # self._pkl_dir = pkl_dir
         self._max_log_nums = max_log_nums
         self._num_samples = 0
         self._cur_best_program_sample_order = None
@@ -91,14 +97,19 @@ class Profiler:
             self._write_tensorboard()
             self._write_json(programs)
 
+    def log_current_best(self):
+        print(f'[Generation {self._num_samples}] Current Best Score: {self._cur_best_program_score}')
+        print(f'Best Program Sample Order: {self._cur_best_program_sample_order}')
+
     def _record_and_verbose(self, sample_orders: int):
         function = self._all_sampled_functions[sample_orders]
+        # function_name = function.name
+        # function_body = function.body.strip('\n')
         function_str = str(function).strip('\n')
         sample_time = function.sample_time
         evaluate_time = function.evaluate_time
         score = function.score
-
-        # Log the function details
+        # log attributes of the function
         print(f'================= Evaluated Function =================')
         print(f'{function_str}')
         print(f'------------------------------------------------------')
@@ -108,12 +119,14 @@ class Profiler:
         print(f'Sample orders: {str(sample_orders)}')
         print(f'======================================================\n\n')
 
-        # Update the best function if applicable
+        # update best function
         if function.score is not None and score > self._cur_best_program_score:
             self._cur_best_program_score = score
             self._cur_best_program_sample_order = sample_orders
 
-        # Update the statistics for function
+        self.log_current_best()
+
+        # update statistics about function
         if score:
             self._evaluate_success_program_num += 1
         else:
@@ -124,41 +137,9 @@ class Profiler:
         if evaluate_time:
             self._tot_evaluate_time += evaluate_time
 
-    def export_all_samples(self, save_path: str):
-        """Exports all logged samples to a single JSON file."""
-        data = []
-        for sample_order, func in self._all_sampled_functions.items():
-            data.append({
-                'sample_order': sample_order,
-                'function': str(func),
-                'score': func.score,
-                'sample_time': func.sample_time,
-                'evaluate_time': func.evaluate_time,
-            })
-        with open(save_path, 'w') as f:
-            json.dump(data, f, indent=2)
-
-    def print_summary(self):
-        """Prints a summary of the experiment."""
-        print("=============== Experiment Summary ===============")
-        print(f"Best score              : {self._cur_best_program_score}")
-        print(f"Best score @ sample     : {self._cur_best_program_sample_order}")
-        print(f"Total samples           : {self._num_samples}")
-        print(f"Valid / Invalid programs: {self._evaluate_success_program_num} / {self._evaluate_failed_program_num}")
-        print(f"Total sample time       : {self._tot_sample_time:.4f}")
-        print(f"Total evaluate time     : {self._tot_evaluate_time:.4f}")
-        print("==================================================\n")
-
-    def export_summary(self, save_path: str):
-        """Exports the final summary to a JSON file."""
-        summary_info = {
-            'best_score': self._cur_best_program_score,
-            'best_sample_order': self._cur_best_program_sample_order,
-            'total_samples': self._num_samples,
-            'success_num': self._evaluate_success_program_num,
-            'failed_num': self._evaluate_failed_program_num,
-            'total_sample_time': self._tot_sample_time,
-            'total_evaluate_time': self._tot_evaluate_time
-        }
-        with open(save_path, 'w') as f:
-            json.dump(summary_info, f, indent=2)
+        # update ...
+        # self._each_sample_best_program_score.append(self._cur_best_program_score)
+        # self._each_sample_evaluate_success_program_num.append(self._evaluate_success_program_num)
+        # self._each_sample_evaluate_failed_program_num.append(self._evaluate_failed_program_num)
+        # self._each_sample_tot_sample_time.append(self._tot_sample_time)
+        # self._each_sample_tot_evaluate_time.append(self._tot_evaluate_time)
