@@ -152,7 +152,8 @@ class Evaluator:
             function_to_run: str,  # RZ: refers to the name of the function to run (e.g., 'evaluate')
             inputs: Sequence[Any],  # RZ: I guess this refers to the evaluate instance
             timeout_seconds: int = 30,
-            sandbox_class: Type[Sandbox] = Sandbox
+            sandbox_class: Type[Sandbox] = Sandbox,
+            profiler: profile.Profiler | None = None  # RZ: add profiler as an argument
     ):
         self._database = database
         self._template = template
@@ -161,6 +162,7 @@ class Evaluator:
         self._inputs = inputs
         self._timeout_seconds = timeout_seconds
         self._sandbox = sandbox_class()
+        self._profiler = profiler  # RZ: Store profiler
 
     def analyse(
             self,
@@ -213,12 +215,12 @@ class Evaluator:
                 evaluate_time=evaluate_time
             )
         else:
-            profiler: profile.Profiler = kwargs.get('profiler', None)
-            if profiler:
+            if self._profiler:
                 global_sample_nums = kwargs.get('global_sample_nums', None)
                 sample_time = kwargs.get('sample_time', None)
                 new_function.global_sample_nums = global_sample_nums
                 new_function.score = None
                 new_function.sample_time = sample_time
                 new_function.evaluate_time = evaluate_time
-                profiler.register_function(new_function)
+                # RZ: Register the function with the profiler
+                self._profiler.register_function(new_function)
