@@ -27,6 +27,21 @@ import profile
 from implementation import code_manipulation
 from implementation import programs_database
 
+import logging
+
+# Logging configuration
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S',
+    handlers=[
+        logging.FileHandler("evaluator.log", mode='a', encoding='utf-8'),
+        logging.StreamHandler()
+    ]
+)
+logger = logging.getLogger(__name__)
+
+
 
 class _FunctionLineVisitor(ast.NodeVisitor):
     """Visitor that finds the last line number of a function with a given name."""
@@ -154,6 +169,7 @@ class Evaluator:
             timeout_seconds: int = 30,
             sandbox_class: Type[Sandbox] = Sandbox,
             log_file: str = './logs/evaluator.log',
+            verbose: bool = False,
             profiler: profile.Profiler | None = None  # RZ: add profiler as an argument
     ):
         self._database = database
@@ -162,54 +178,47 @@ class Evaluator:
         self._function_to_run = function_to_run
         self._inputs = inputs
         self._timeout_seconds = timeout_seconds
-        self._sandbox = sandbox_class()
+        self._sandbox = sandbox_class(),
+        self._verbose = verbose
         self._profiler = profiler  # RZ: Store profiler
         self._log_file = log_file
 
 
     def analyse(
-            self,
-            sample: str,
-            island_id: int | None,
-            version_generated: int | None,
-            **kwargs  # RZ: add this to do profile
-    ) -> None:
-        """Compiles the sample into a program and executes it on test inputs.
+        self,
+        sample: str,
+        island_id: int | None,
+        version_generated: int | None,
+        **kwargs
+        ) -> None:
+        """Compiles the sample into a program and executes it on test inputs."""
 
-        Args:
-            sample: RZ: please note that the sample must be preprocessed--only have function body,
-                    no description before it (except annotations), no symbols before it.
-                    Or the "_sample_to_program" function will fail!!!
-        """
-        # RZ: 'new_function' refers to the evolved function ('def' statement + function body)
-        # RZ: 'program' is the template code + new_function
         new_function, program = _sample_to_program(
-            sample, version_generated, self._template, self._function_to_evolve)
+        sample, version_generated, self._template, self._function_to_evolve)
         scores_per_test = {}
+
+        if verbose:
+            logger.info(f"Start analyzing sample (island_id={island_id}, version={version_generated})")
 
         time_reset = time.time()
         for current_input in self._inputs:
-            # RZ: IMPORTANT !!! if self._inputs is a dict,
-            # current_input is a key (perhaps in string type)
-            # do not ignore this when implementing SandBox !!!
-
             test_output, runs_ok = self._sandbox.run(
-                program, self._function_to_run, self._function_to_evolve, self._inputs, current_input,
-                self._timeout_seconds
-            )
+            program, self._function_to_run, self._function_to_evolve, self._inputs, current_input,
+            self._timeout_seconds
+        )
 
             if runs_ok and not _calls_ancestor(program, self._function_to_evolve) and test_output is not None:
                 if not isinstance(test_output, (int, float)):
-                    print(f'RZ=> Error: test_output is {test_output}')
+                    logger.error(f"Invalid test output: {test_output}")
                     raise ValueError('@function.run did not return an int/float score.')
-                scores_per_test[current_input] = test_output
+            scores_per_test[current_input] = test_output
 
         evaluate_time = time.time() - time_reset
 
-        # RZ: If 'score_per_test' is not empty, the score of the program will be recorded to the profiler by the 'register_program'.
-        # This is because the register_program will do reduction for a given Function score.
-        # If 'score_per_test' is empty, we record it to the profiler at once.
         if scores_per_test:
+            if verbose:
+                avg_score = sum(scores_per_test.values()) / len(scores_per_test)
+                logger.info(f"Evaluation successful | Average score = {avg_score:.4f} | Time used = {evaluate_time:.2f}s")
             self._database.register_program(
                 new_function,
                 island_id,
@@ -218,12 +227,14 @@ class Evaluator:
                 evaluate_time=evaluate_time
             )
         else:
-            if self._profiler:
+            if verbose:
+                logger.warning(f"Evaluation failed | No valid scores | Time used = {evaluate_time:.2f}s")
+            profiler: profile.Profiler = kwargs.get('profiler', None)
+            if profiler:
                 global_sample_nums = kwargs.get('global_sample_nums', None)
                 sample_time = kwargs.get('sample_time', None)
                 new_function.global_sample_nums = global_sample_nums
                 new_function.score = None
                 new_function.sample_time = sample_time
                 new_function.evaluate_time = evaluate_time
-                # RZ: Register the function with the profiler
-                self._profiler.register_function(new_function)
+                profiler.register_function(new_function)
