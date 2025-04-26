@@ -189,6 +189,7 @@ class Evaluator:
         sample: str,
         island_id: int | None,
         version_generated: int | None,
+        verbose: bool = False,
         **kwargs
         ) -> None:
         """Compiles the sample into a program and executes it on test inputs."""
